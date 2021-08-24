@@ -359,7 +359,7 @@ var removeCommand = cli.Command{
 var pruneCommand = cli.Command{
 	Name:        "prune",
 	Usage:       "remove unused images",
-	ArgsUsage:   "[flags] <ref> [<ref>, ...]",
+	ArgsUsage:   "[flags] [<filter>, ...]",
 	Description: "remove one or more unused images",
 	Flags: []cli.Flag{
 		cli.BoolFlag{
@@ -377,20 +377,33 @@ var pruneCommand = cli.Command{
 		defer cancel()
 		var (
 			exitErr        error
+			filters        = context.Args()
+			removeAll      = context.Bool("all")
 			imageStore     = client.ImageService()
 			containerStore = client.ContainerService()
 		)
 
-		images, err := imageStore.List(ctx, "")
-		containers, err := containerStore.List(ctx, "")
+		imageList, err := imageStore.List(ctx, filters...)
+		if err != nil {
+			// TODO
+		}
+
+		containerList, err := containerStore.List(ctx)
+		if err != nil {
+			// TODO
+		}
 
 		unusedImages := make(map[string]struct{})
 
-		for _, image := range images {
+		for _, image := range imageList {
+			if image.Name == "" {
+				// TODO delete image if reference is empty string.
+			}
+
 			unusedImages[image.Name] = struct{}{}
 		}
 
-		for _, container := range containers {
+		for _, container := range containerList {
 			delete(unusedImages, container.Image)
 		}
 
