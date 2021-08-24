@@ -355,3 +355,57 @@ var removeCommand = cli.Command{
 		return exitErr
 	},
 }
+
+var pruneCommand = cli.Command{
+	Name:        "prune",
+	Usage:       "remove unused images",
+	ArgsUsage:   "[flags] <ref> [<ref>, ...]",
+	Description: "remove one or more unused images",
+	Flags: []cli.Flag{
+		cli.BoolFlag{
+			Name:  "all, a",
+			Usage: "Remove all unused images.",
+		},
+	},
+	Action: func(context *cli.Context) error {
+		client, ctx, cancel, err := commands.NewClient(context)
+		if err != nil {
+			return err
+		}
+
+		// TODO what does this do?
+		defer cancel()
+		var (
+			exitErr    error
+			imageStore = client.ImageService()
+		)
+
+		images, err := imageStore.List(ctx, "")
+
+		for _, image := range images {
+
+		}
+
+		for i, target := range context.Args() {
+			var opts []images.DeleteOpt
+			if context.Bool("sync") && i == context.NArg()-1 {
+				opts = append(opts, images.SynchronousDelete())
+			}
+			if err := imageStore.Delete(ctx, target, opts...); err != nil {
+				if !errdefs.IsNotFound(err) {
+					if exitErr == nil {
+						exitErr = errors.Wrapf(err, "unable to delete %v", target)
+					}
+					log.G(ctx).WithError(err).Errorf("unable to delete %v", target)
+					continue
+				}
+				// image ref not found in metadata store; log not found condition
+				log.G(ctx).Warnf("%v: image not found", target)
+			} else {
+				fmt.Println(target)
+			}
+		}
+
+		return exitErr
+	},
+}
