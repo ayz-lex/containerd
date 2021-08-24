@@ -376,36 +376,41 @@ var pruneCommand = cli.Command{
 		// TODO what does this do?
 		defer cancel()
 		var (
-			exitErr    error
-			imageStore = client.ImageService()
+			exitErr        error
+			imageStore     = client.ImageService()
+			containerStore = client.ContainerService()
 		)
 
 		images, err := imageStore.List(ctx, "")
+		containers, err := containerStore.List(ctx, "")
+
+		unusedImages := make(map[string]struct{})
 
 		for _, image := range images {
-
+			unusedImages[image.Name] = struct{}{}
 		}
 
-		for i, target := range context.Args() {
+		for _, container := range containers {
+			delete(unusedImages, container.Image)
+		}
+
+		for image, _ := range unusedImages {
 			var opts []images.DeleteOpt
-			if context.Bool("sync") && i == context.NArg()-1 {
-				opts = append(opts, images.SynchronousDelete())
-			}
-			if err := imageStore.Delete(ctx, target, opts...); err != nil {
+			opts = append(opts, images.SynchronousDelete())
+			if err := imageStore.Delete(ctx, image, opts...); err != nil {
 				if !errdefs.IsNotFound(err) {
 					if exitErr == nil {
-						exitErr = errors.Wrapf(err, "unable to delete %v", target)
+						exitErr = errors.Wrapf(err, "unable to delete %v", image)
 					}
-					log.G(ctx).WithError(err).Errorf("unable to delete %v", target)
+					log.G(ctx).WithError(err).Errorf("unable to delete %v", image)
 					continue
 				}
 				// image ref not found in metadata store; log not found condition
-				log.G(ctx).Warnf("%v: image not found", target)
+				log.G(ctx).Warnf("%v: image not found", image)
 			} else {
-				fmt.Println(target)
+				fmt.Println(image)
 			}
 		}
-
 		return exitErr
 	},
 }
