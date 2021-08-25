@@ -46,6 +46,7 @@ var Command = cli.Command{
 		listCommand,
 		mountCommand,
 		unmountCommand,
+		pruneCommand,
 		pullCommand,
 		pushCommand,
 		removeCommand,
@@ -359,9 +360,9 @@ var removeCommand = cli.Command{
 
 var pruneCommand = cli.Command{
 	Name:        "prune",
-	Usage:       "remove unused images",
+	Usage:       "remove dangling images",
 	ArgsUsage:   "[flags] [<filter>, ...]",
-	Description: "remove one or more unused images",
+	Description: "remove one or more dangling and unused images",
 	Flags: []cli.Flag{
 		cli.BoolFlag{
 			Name:  "all, a",
