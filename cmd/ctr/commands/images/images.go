@@ -17,7 +17,6 @@
 package images
 
 import (
-	"context"
 	"fmt"
 	"os"
 	"sort"
@@ -360,15 +359,9 @@ var removeCommand = cli.Command{
 
 var pruneCommand = cli.Command{
 	Name:        "prune",
-	Usage:       "remove dangling images",
+	Usage:       "remove unused images",
 	ArgsUsage:   "[flags] [<filter>, ...]",
-	Description: "remove one or more dangling and unused images",
-	Flags: []cli.Flag{
-		cli.BoolFlag{
-			Name:  "all, a",
-			Usage: "Remove all unused images.",
-		},
-	},
+	Description: "remove one or more unused images",
 	Action: func(context *cli.Context) error {
 		client, ctx, cancel, err := commands.NewClient(context)
 		if err != nil {
@@ -379,7 +372,6 @@ var pruneCommand = cli.Command{
 		var (
 			exitErr        error
 			filters        = context.Args()
-			removeAll      = context.Bool("all")
 			imageStore     = client.ImageService()
 			containerStore = client.ContainerService()
 		)
@@ -397,45 +389,31 @@ var pruneCommand = cli.Command{
 		unusedImages := make(map[string]struct{})
 
 		for _, image := range imageList {
-			if image.Name == "" {
-				exitErr = deleteImage(ctx, image.Name, imageStore)
-			}
-			if removeAll {
-				unusedImages[image.Name] = struct{}{}
+			unusedImages[image.Name] = struct{}{}
+		}
+
+		for _, container := range containerList {
+			delete(unusedImages, container.Image)
+		}
+
+		for image, _ := range unusedImages {
+			opts := []images.DeleteOpt{images.SynchronousDelete()}
+
+			if err := imageStore.Delete(ctx, image, opts...); err != nil {
+				if !errdefs.IsNotFound(err) {
+					if exitErr == nil {
+						exitErr = errors.Wrapf(err, "unable to delete %v", image)
+					}
+					log.G(ctx).WithError(err).Errorf("unable to delete %v", image)
+					continue
+				}
+				// image ref not found in metadata store; log not found condition
+				log.G(ctx).Warnf("%v: image not found", image)
+			} else {
+				fmt.Println(image)
 			}
 		}
 
-		if removeAll {
-			for _, container := range containerList {
-				delete(unusedImages, container.Image)
-			}
-
-			for image, _ := range unusedImages {
-				exitErr = deleteImage(ctx, image, imageStore)
-			}
-		}
 		return exitErr
 	},
-}
-
-func deleteImage(ctx context.Context, image string, imageStore images.Store) error {
-	var (
-		exitErr error
-		opts    []images.DeleteOpt
-	)
-	opts = append(opts, images.SynchronousDelete())
-	if err := imageStore.Delete(ctx, image, opts...); err != nil {
-		if !errdefs.IsNotFound(err) {
-			if exitErr == nil {
-				exitErr = errors.Wrapf(err, "unable to delete %v", image)
-			}
-			log.G(ctx).WithError(err).Errorf("unable to delete %v", image)
-			return exitErr
-		}
-		// image ref not found in metadata store; log not found condition
-		log.G(ctx).Warnf("%v: image not found", image)
-	} else {
-		fmt.Println(image)
-	}
-	return exitErr
 }
